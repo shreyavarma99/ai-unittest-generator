@@ -1,17 +1,18 @@
-#!/bin/sh
+#!/bin/bash
 
-# Start Ollama server in background
+# Start Ollama in the background
 ollama serve &
 
-# Wait for server to start
-echo "Waiting for Ollama to start..."
-until curl -s http://localhost:11434 > /dev/null; do
-  sleep 1
+# Wait for Ollama to be available before continuing
+until curl --silent http://localhost:11434; do
+  echo "Waiting for Ollama to start..."
+  sleep 2
 done
 
-# Automatically pull the model (if not already pulled)
-echo "Pulling mistral:instruct model..."
+# 🧠 Pull mistral:instruct in the foreground (blocking)
+echo "📦 Pulling mistral:instruct..."
 ollama pull mistral:instruct
 
-# Keep container alive
-wait
+# ✅ Start your Flask app
+echo "🚀 Starting Flask server..."
+python3 testgen.py

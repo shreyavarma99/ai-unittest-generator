@@ -1,68 +1,29 @@
-# import requests
-# import json
-
-# from embedder import retrieve_similar_examples
 
 
-# # Get the instructor's prompt
-# instructor_prompt = input("What are your assignment specs?\n")
-
-# # Use this to convert the instructor's input into a full prompt
-# def generate_prompt(instructor_prompt):
-#     example = retrieve_similar_examples(instructor_prompt, 1)
-#     solution = example["solution"]
-#     test_code = example["test_code"]
-
-#     prompt = (
-#         f"You are given an instructor's assignment spec. "
-#         f"Below is a similar example with its solution and corresponding test code. "
-#         f"Use the example to generate Python unittests for the new spec.\n\n"
-#         f"---\n"
-#         f"🔁 Example Spec:\n{example['id']}\n"
-#         f"💡 Example Solution:\n{solution}\n"
-#         f"✅ Example Test Code:\n{test_code}\n"
-#         f"---\n"
-#         f"🆕 New Instructor Spec:\n{instructor_prompt}\n"
-#         f"🧪 Generate unittest code for the new spec."
-#     )
-
-#     print("PROMPT HERE: ", prompt)
-#     # return TypeError
-#     return f"Generate Python unittests based on the following instructor specs:\n{instructor_prompt}"
-
-# # Construct the actual prompt for the model
-# prompt = generate_prompt(instructor_prompt)
-
-# # Send the prompt to DeepSeek running on localhost
-# response = requests.post(
-#     "http://localhost:11434/api/generate",
-#     headers={"Content-Type": "application/json"},
-#     data=json.dumps({
-#         "model": "deepseek-coder",
-#         "prompt": prompt,
-#         "stream": False
-#     })
-# )
-
-# # Output the result
-# result = response.json()
-# print("\n🧪 Generated Test Code:\n")
-# print(result["response"])
-
-
+from flask import Flask, request, jsonify
 import requests
 import json
-from embedder import retrieve_similar_examples
+from embedder import retrieve_similar_examples  # Make sure this exists
+from flask_cors import CORS
 
-# Get the instructor's prompt
-instructor_prompt = input("What are your assignment specs?\n")
 
-# Generate Windsurf prompt using RAG example
-def generate_prompt(instructor_prompt):
+app = Flask(__name__)
+CORS(app)
+
+@app.route('/generate-test', methods=['POST'])
+def generate_test():
+    data = request.json
+    instructor_prompt = data.get("prompt", "")
+    
+    if not instructor_prompt:
+        return jsonify({"error": "Missing prompt"}), 400
+
+    # Get RAG-based similar example
     example = retrieve_similar_examples(instructor_prompt, 1)
     solution = example["solution"]
     test_code = example["test_code"]
 
+    # Format the Windsurf prompt
     prompt = (
         f"You are given an instructor's assignment spec. "
         f"Below is a similar example with its solution and corresponding test code. "
@@ -76,24 +37,29 @@ def generate_prompt(instructor_prompt):
         f"🧪 Generate unittest code for the new spec."
     )
 
-    print("PROMPT HERE:\n", prompt)
-    return prompt
+    response = requests.post(
+        "http://localhost:11434/api/generate",
+        headers={"Content-Type": "application/json"},
+        data=json.dumps({
+            "model": "mistral:instruct",
+            "prompt": prompt,
+            "stream": False
+        })
+    )
 
-# Construct the actual prompt
-prompt = generate_prompt(instructor_prompt)
+    # result = response.json()
+    # return jsonify({"response": result["response"]})
 
-# Send the prompt to Windsurf AI
-response = requests.post(
-    "http://localhost:11434/api/generate",
-    headers={"Content-Type": "application/json"},
-    data=json.dumps({
-        "model": "mistral:instruct",
-        "prompt": prompt,
-        "stream": False
-    })
-)
+    print("🧠 Ollama raw response:", response.status_code, response.text)
 
-# Output the result
-result = response.json()
-print("\n🧪 Generated Test Code:\n")
-print(result["response"])
+    # Defensive check
+    try:
+        result = response.json()
+        return jsonify({"response": result.get("response", "⚠️ No response field in Ollama output")})
+    except Exception as e:
+        print("❌ Failed to parse Ollama output:", e)
+        return jsonify({"error": "Failed to get response from model"}), 500
+
+
+if __name__ == '__main__':
+    app.run(host="0.0.0.0", port=5002)

@@ -2,3 +2,6 @@ python-dotenv
 pytest
 chromadb
 sentence-transformers
+flask
+requests
+flask-cors
